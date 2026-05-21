@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0a3] - 2026-05-21
+
+Metadata-only release. No code or behaviour changes from 0.1.0a2.
+Added a missing `[project.urls]` block to `pyproject.toml` so the
+PyPI project page renders sidebar links (Homepage, Repository,
+Issues, Changelog, Documentation) back to the GitHub repo. Also
+added PyPI search keywords and two extra PyPI classifiers
+(Mathematics / Physics topics, OS-independent flag) to improve
+search ranking and signal the package's scope.
+
+### Added
+- `[project.urls]`: Homepage / Repository / Issues / Changelog /
+  Documentation, all pointing at the GitHub repo.
+- `keywords` list for PyPI search.
+- Two additional classifiers.
+
 ## [0.1.0a2] - 2026-05-21
 
 Documentation + framing tightening. No code or behaviour changes

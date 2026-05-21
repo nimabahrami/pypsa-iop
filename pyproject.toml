@@ -1,6 +1,6 @@
 [project]
 name = "pypsa-invopt"
-version = "0.1.0a2"
+version = "0.1.0a3"
 description = "Inverse-OPF calibration layer for PyPSA: recovers bid-cost vectors that reproduce observed market clearings, so downstream counterfactuals run on calibrated economics instead of textbook costs."
 readme = "README.md"
 license = "MIT"
@@ -8,15 +8,23 @@ requires-python = ">=3.10"
 authors = [
     { name = "Nima Bahrami" },
 ]
+keywords = [
+    "pypsa", "inverse-optimization", "inverse-opf", "energy-systems",
+    "electricity-markets", "market-monitoring", "kkt", "power-systems",
+    "day-ahead", "calibration", "bid-recovery",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Physics",
 ]
 dependencies = [
     # Core modeling
@@ -27,6 +35,13 @@ dependencies = [
     "pandas>=2.0",
     "scipy>=1.10",
 ]
+
+[project.urls]
+Homepage      = "https://github.com/nimabahrami/pypsa-iop"
+Repository    = "https://github.com/nimabahrami/pypsa-iop"
+Issues        = "https://github.com/nimabahrami/pypsa-iop/issues"
+Changelog     = "https://github.com/nimabahrami/pypsa-iop/blob/main/CHANGELOG.md"
+Documentation = "https://github.com/nimabahrami/pypsa-iop/blob/main/README.md"
 
 [project.optional-dependencies]
 mcmc = [
