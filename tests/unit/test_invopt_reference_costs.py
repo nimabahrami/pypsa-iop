@@ -119,3 +119,60 @@ def test_flag_withholding_unidentifiable_marked():
         co2_price=0.0,
     )
     assert flags["peaker"].flag == "unidentifiable"
+
+
+def test_flag_withholding_skips_renewables_by_default():
+    """Wind / solar / hydro are bound-binding and not identifiable —
+    they must not appear in the withholding scorer's output by default
+    (otherwise the user sees textbook false positives)."""
+    theta_hat = {
+        "gen:offshore_wind:marginal_cost": 45.0,    # spurious recovery
+        "gen:pv_park:marginal_cost":       38.0,    # spurious recovery
+        "gen:run_river:marginal_cost":     22.0,    # spurious recovery
+        "gen:ccgt_main:marginal_cost":     72.0,    # legitimate
+    }
+    carriers = {
+        "offshore_wind": "wind", "pv_park": "solar",
+        "run_river": "hydro",    "ccgt_main": "gas",
+    }
+    flags = flag_withholding(
+        theta_hat=theta_hat,
+        generator_carriers=carriers,
+        fuel_prices={"gas": 35.0},
+        co2_price=75.0,
+    )
+    # Only the thermal gen survives the default filter.
+    assert set(flags.keys()) == {"ccgt_main"}
+
+
+def test_flag_withholding_skip_disable_lets_renewables_through():
+    """``skip_non_dispatchable=False`` returns the old behaviour for
+    callers that have a genuinely interior-renewable fleet model."""
+    theta_hat = {"gen:offshore_wind:marginal_cost": 45.0}
+    carriers = {"offshore_wind": "wind"}
+    flags = flag_withholding(
+        theta_hat=theta_hat,
+        generator_carriers=carriers,
+        skip_non_dispatchable=False,
+    )
+    assert "offshore_wind" in flags
+
+
+def test_flag_withholding_include_carriers_filter():
+    """``include_carriers`` restricts scoring to an explicit set."""
+    theta_hat = {
+        "gen:nuc_a:marginal_cost":  9.0,
+        "gen:coal_b:marginal_cost": 40.0,
+        "gen:ccgt_c:marginal_cost": 70.0,
+        "gen:ocgt_d:marginal_cost": 110.0,
+    }
+    carriers = {"nuc_a": "nuclear", "coal_b": "coal",
+                "ccgt_c": "gas",    "ocgt_d": "ocgt"}
+    flags = flag_withholding(
+        theta_hat=theta_hat,
+        generator_carriers=carriers,
+        include_carriers={"gas", "ocgt"},
+        fuel_prices={"gas": 35.0, "ocgt": 35.0},
+        co2_price=75.0,
+    )
+    assert set(flags.keys()) == {"ccgt_c", "ocgt_d"}

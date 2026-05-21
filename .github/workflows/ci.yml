@@ -32,8 +32,12 @@ jobs:
       - name: Lint (ruff)
         run: ruff check src tests
 
-      - name: Test (pytest, with coverage)
-        run: pytest tests --cov=src/pypsa_invopt --cov-report=term-missing -q
+      - name: Test (unit; fast)
+        run: pytest tests/unit --cov=src/pypsa_invopt --cov-report=term-missing -q
+
+      - name: Test (integration; notebook execution; only on 3.12)
+        if: matrix.python-version == '3.12'
+        run: pytest tests/integration -q
 
       - name: Upload coverage to codecov
         if: matrix.python-version == '3.12'

@@ -20,6 +20,17 @@ from dataclasses import dataclass
 
 from pypsa_invopt.identifiability import ParameterIdentifiability
 
+# Carriers whose marginal cost is structurally ≈ 0 and which are
+# almost always bound-binding (at p_max during sun/wind, at 0 otherwise).
+# The inverse problem cannot pin their bid: ν absorbs any deviation.
+# We exclude them from withholding scoring by default to suppress the
+# textbook false-positive ("wind flagged at €50 because the prior
+# pulled it there with no data signal"). Caller can override via
+# ``include_carriers``.
+_NON_DISPATCHABLE_CARRIERS: frozenset[str] = frozenset({
+    "wind", "solar", "hydro", "renewables",
+})
+
 # --- Engineering defaults (overridable per call) -----------------------------
 
 # NREL ATB 2024 heat rates (MMBtu/MWh — divide by ~3.41 to get thermal MWh / MWh).
@@ -191,6 +202,8 @@ def flag_withholding(
     variable_oms: dict[str, float] | None = None,
     z_threshold: float = 2.0,
     absolute_threshold: float = 5.0,
+    include_carriers: set[str] | None = None,
+    skip_non_dispatchable: bool = True,
 ) -> dict[str, WithholdingFlag]:
     """Compare every recovered cost against its engineering reference.
 
@@ -213,6 +226,16 @@ def flag_withholding(
             withholding / distressed. Default 2.0 (≈ 95 % confidence).
         absolute_threshold: Fallback EUR/MWh deviation threshold when
             no posterior σ is available. Default 5.0.
+        include_carriers: If supplied, score only generators on these
+            carriers; everything else is skipped. Mutually exclusive
+            with ``skip_non_dispatchable=False`` semantics.
+        skip_non_dispatchable: When ``True`` (default), skip generators
+            on wind / solar / hydro / renewables carriers. These are
+            structurally bound-binding and the inverse problem cannot
+            pin their bid — flagging them would produce textbook false
+            positives ("wind withholding at €50" when the prior just
+            pulled it there with no data signal). Set ``False`` only if
+            you know your fleet model genuinely has interior renewables.
 
     Returns:
         Dict mapping ``gen_name → WithholdingFlag``.
@@ -225,6 +248,10 @@ def flag_withholding(
             continue
         gen = key.split(":")[1]
         carrier = generator_carriers.get(gen, "")
+        if include_carriers is not None and carrier not in include_carriers:
+            continue
+        if skip_non_dispatchable and carrier in _NON_DISPATCHABLE_CARRIERS:
+            continue
         fp = (fuel_prices or {}).get(carrier)
         hr = (heat_rates or {}).get(gen)
         ef = (emission_factors or {}).get(carrier)

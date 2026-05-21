@@ -22,7 +22,14 @@ Typical usage::
 """
 from __future__ import annotations
 
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    import pandas as pd
+
+    from pypsa_invopt.data.quality import DataQualityReport
+    from pypsa_invopt.identifiability import ParameterIdentifiability
+    from pypsa_invopt.reference_costs import WithholdingFlag
 
 from pypsa_invopt._version import __version__
 from pypsa_invopt.exceptions import (
@@ -56,7 +63,7 @@ def apply(*args: Any, **kwargs: Any) -> None:
     apply_result(*args, **kwargs)
 
 
-def observations_from_pypsa(*args: Any, **kwargs: Any):
+def observations_from_pypsa(*args: Any, **kwargs: Any) -> pd.DataFrame:
     """Build the observation DataFrame ``calibrate`` expects from a
     solved ``pypsa.Network``.
 
@@ -80,7 +87,7 @@ def posterior(*args: Any, **kwargs: Any) -> PosteriorResult:
     return _impl(*args, **kwargs)
 
 
-def identifiability(*args: Any, **kwargs: Any):
+def identifiability(*args: Any, **kwargs: Any) -> dict[str, ParameterIdentifiability]:
     """Compute per-parameter identifiability metrics from a posterior.
 
     Standard signals from the inverse-problem literature: posterior
@@ -94,7 +101,7 @@ def identifiability(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
-def flag_withholding(*args: Any, **kwargs: Any):
+def flag_withholding(*args: Any, **kwargs: Any) -> dict[str, WithholdingFlag]:
     """Compare recovered costs against engineering reference costs.
 
     Implements the Birge-Hortaçsu-Pavlin (2017) MISO market-monitoring
@@ -108,7 +115,7 @@ def flag_withholding(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
-def compute_reference_cost(*args: Any, **kwargs: Any):
+def compute_reference_cost(*args: Any, **kwargs: Any) -> ReferenceCost:
     """Compute the engineering-reference marginal cost of a generator.
 
     Returns ``fuel_price × heat_rate + co2_price × emission + var_O&M``
@@ -122,7 +129,7 @@ def compute_reference_cost(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
-def load_entso_e(*args: Any, **kwargs: Any):
+def load_entso_e(*args: Any, **kwargs: Any) -> pd.DataFrame:
     """Load ENTSO-E market data.
 
     Requires ``pip install pypsa-invopt[entso_e]``. See
@@ -150,7 +157,7 @@ def validate_observations(*args: Any, **kwargs: Any) -> list[str]:
     return _impl(*args, **kwargs)
 
 
-def assess_data_quality(*args: Any, **kwargs: Any):
+def assess_data_quality(*args: Any, **kwargs: Any) -> DataQualityReport:
     """Quality report on a market-data DataFrame.
 
     Returns a :class:`pypsa_invopt.data.quality.DataQualityReport` with
