@@ -36,7 +36,7 @@ notebook for a working API path).
 - PyPSA network read/write interface (`pio.apply` writer for the
   six supported component families).
 
-### Real-market validation
+### Real-market validation (one week, late 2019)
 
 - `examples/real_data_DE_LU_validation.ipynb` calibrates against real
   Open Power System Data (OPSD 2020-10-06 release) DE_LU day-ahead
@@ -48,10 +48,32 @@ notebook for a working API path).
 - 38 KB validation slice ships with the package at
   `examples/data/de_lu_2019_validation.csv`.
 
+**Caveat that rides shotgun with the headline number.** This is *one*
+week of late 2019: pre-COVID, pre-gas-crisis, pre-renewables-buildout-
+at-scale, pre-CO₂-price-doubling. The regime where it was validated is
+qualitatively different from the regime where you'd deploy it. Treat
+the 75 % as proof-of-concept evidence, not a generalisation guarantee.
+Rolling-week validation across 2018-2024 is the next-paper-worth-of-
+work.
+
+### What we recover (precisely)
+
+The recovered bids are *calibration-consistent projections* of the
+real bid book onto a convex DCOPF with quadratic-affine offer curves.
+Real EUPHEMIA bids are step-functions with complex orders and
+paradoxically-rejected blocks; the recovery can absorb some of that
+mechanism gap into the recovered numbers. We do not claim to recover
+the confidential true bid book — we recover a bid vector that
+reproduces observed clearings and feeds downstream counterfactuals
+on something better than engineering reference.
+
+### Numbers to NOT conflate
+
+- **75 %** = real EPEX held-out-week RMSE reduction (the bankable one).
+- **88 %** = synthetic controlled-truth stress test (`full_lifecycle_NL.ipynb` §10).
+- **79 %** = "marginal-generator identification accuracy", *synthetic only*
+  — real EPEX does not publish ground-truth on which unit was marginal.
+
 ### Caveats explicitly NOT shipped
-- The "88 % RMSE improvement" reported in `examples/full_lifecycle_NL.ipynb`
-  §10 is a *synthetic* stress-test against a deliberately-50%-perturbed
-  engineering-reference baseline. The 75 % number above is the real-
-  market figure to act on.
 - The MCMC posterior path is gated on PyMC and only sanity-checked,
   not integration-tested.

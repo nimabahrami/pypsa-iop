@@ -1,12 +1,14 @@
 # pypsa-invopt
 
-**Calibrate your PyPSA grid model to what the market actually did yesterday — then ask "what if?"**
+**Calibrate your PyPSA grid model to observed market clearings — then ask "what if?"**
 
-So you've built a beautiful PyPSA network of the Dutch grid. CCGTs at Maasvlakte, batteries at AM, the COBRAcable to Denmark, the whole thing. You feed it engineering-reference costs (gas heat-rate × fuel + CO₂ + O&M) and run it. The LMPs come out... fine. Plausible. But you know they're wrong, because if you plot them against yesterday's actual EPEX clearings the RMSE is like 50+ €/MWh and the peaks are in the wrong hours.
+So you've built a beautiful PyPSA network of the Dutch grid. CCGTs at Maasvlakte, batteries at AM, the COBRAcable to Denmark, the whole thing. You feed it engineering-reference costs (gas heat-rate × fuel + CO₂ + O&M) and run it. The LMPs come out... fine. Plausible. But you know they're off, because if you plot them against yesterday's actual EPEX clearings the RMSE is 20+ €/MWh and the peaks land in the wrong hours.
 
-That's because nobody in the real market bids their engineering reference. They bid hedging positions, ramp-up opportunity costs, strategic markups, unit-commitment overhang. Your textbook PyPSA model has none of that. **This package fixes that.**
+That's because nobody in the real market bids their engineering reference. They bid hedging positions, ramp-up opportunity costs, strategic markups, unit-commitment overhang. Your textbook PyPSA model has none of that. **This package fills that gap.**
 
-You give it `(network, observed_LMPs)` → it gives you back the bid vector that explains those LMPs. Drop the bids back into the network, re-solve, and now your model matches reality. Then go ask the question you actually care about: "what if I add 600 MW of BES here?" The forward solver gives you a defensible answer because the costs underneath are calibrated, not engineered.
+You give it `(network, observed_LMPs)` → it returns a bid vector that explains those LMPs. Drop the bids back into the network, re-solve, and your model now reproduces the *observed clearings* on the calibration window. Then go ask the question you actually care about: "what if I add 600 MW of BES here?" The forward solver gives you a defensible answer because the costs underneath are calibrated to recent behaviour, not engineered.
+
+> **Be precise about what we recover.** The recovered bids are *calibration-consistent projections* of the real bid book onto a convex DCOPF with quadratic-affine offer curves. Real EUPHEMIA bids are step-functions of quantity with complex orders and paradoxically-rejected blocks — that mechanism gap is real and inverse-OPF can absorb some of it into the recovered numbers. We are not claiming to recover the confidential true bid book. We are recovering a bid vector that, fed back into the same DCOPF, reproduces the observed clearings and lets downstream counterfactuals run on something better than engineering reference.
 
 The math is one sparse convex QP — Liang & Dvorkin's KKT reformulation from their 2023 e-Energy paper — and HiGHS solves it in tens of milliseconds. Quadratic-affine bid recovery (the `α + β·q` heat-rate slopes) follows Birge-Hortaçsu-Pavlin 2017. We didn't invent any of this. We wrapped it for PyPSA, added a temporal-batching trick for big thermal-only grids (ASTB), and built an identifiability layer that tells you which recovered bids you can trust and which ones to ignore.
 
@@ -33,15 +35,19 @@ The correct architecture is **both**, not either. Run ML for the headline foreca
 
 ## When this earns its keep
 
-There are basically three regimes where you genuinely need inverse-OPF:
+The package is built for **residual-load hours** — the hours where dispatchable thermal capacity is at the margin and where BES revenue actually lives. That means evening peak (17-22 h CET), morning ramp, and the residual-load regime more broadly. In NL/DE 2024 those hours represent maybe 60-70 % of the year but ~95 % of BES revenue; outside that window (midday solar surplus, deep-night low-load) the recovered bids are weakly informed and the package's identifiability layer flags them accordingly.
 
-**1. Infrastructure planning** — you're sizing a new asset and counterfactuals on textbook costs would give you garbage. A BESS developer evaluating 600 MW at Amsterdam needs to know what the LMP curve *actually* looks like post-installation, not what the engineering model thinks it should look like. The §9 walkthrough in `examples/full_lifecycle_NL.ipynb` is exactly this workflow end-to-end.
+The number of "renewable-marginal" hours (zero or negative prices) has grown ~3-5 pp/year in NL/DE. We are not pretending that trend reverses; we are pointing out the windows where bid recovery still does most of the work for the decisions you actually have to defend.
 
-**2. Market monitoring** — you suspect a generator is strategically withholding capacity. Birge-Hortaçsu-Pavlin (2017) on MISO is the canonical paper; `pio.flag_withholding` implements the same scorer. You compare recovered marginal cost against engineering reference (fuel + heat-rate + CO₂ + O&M); large positive gap → flag.
+Three concrete regimes where inverse-OPF beats every alternative we know of:
 
-**3. Decomposed LMP attribution** — you want to know *why* an LMP spike happened. Was it bid markup? Congestion on a specific line? CO₂ cap binding? With inverse-OPF + the network duals, each piece falls out of the QP — you can do risk decomposition that ML can't.
+**1. Infrastructure planning.** You're sizing a new asset and counterfactuals on textbook costs would give you garbage. A BESS developer evaluating 600 MW at Amsterdam needs to know what the LMP curve *would* look like post-installation, not what the engineering model thinks it should. The §9 walkthrough in `examples/full_lifecycle_NL.ipynb` is this workflow end-to-end.
 
-For NL specifically: case 2 is the sweet spot — batteries, gas, offshore wind, grid getting tighter every year, big project pipelines. Anyone running PyPSA simulations with textbook costs is feeding their planner garbage.
+**2. Market monitoring.** You suspect a generator is strategically withholding capacity. Birge-Hortaçsu-Pavlin (2017) on MISO is the canonical paper; `pio.flag_withholding` implements the same scorer (with the textbook renewables-false-positive filter on by default). You compare recovered marginal cost against engineering reference (fuel + heat-rate + CO₂ + O&M); large positive gap → flag for further investigation.
+
+**3. Decomposed LMP attribution.** You want to know *why* an LMP spike happened. Bid markup, congestion on a specific line, or CO₂ cap binding? With inverse-OPF + the network duals, each piece falls out of the QP — you can do risk decomposition that ML cannot.
+
+For NL/DE specifically: case 1 is the sweet spot. Big project pipelines, tightening grids, planners running PyPSA with textbook costs are feeding their planner numbers that diverge from observed clearings by 20+ €/MWh.
 
 ## What's in the box
 
@@ -122,7 +128,7 @@ result = pio.calibrate(
 
 ## Does it actually work?
 
-**Yes — on real European EPEX data.** Headline numbers from `examples/real_data_DE_LU_validation.ipynb` (DE_LU day-ahead, week of 11 Nov 2019, calibrated on the preceding week):
+**Yes — on a held-out week of real EPEX data.** Headline numbers from `examples/real_data_DE_LU_validation.ipynb` (DE_LU day-ahead, week of 11 Nov 2019, calibrated on the preceding week):
 
 | Held-out-week LMP RMSE | EUR/MWh |
 |---|---|
@@ -130,15 +136,22 @@ result = pio.calibrate(
 | Inverse-OPF calibrated bids | **5.66** |
 | **Improvement** | **−75.2 %** |
 
+> **Caveat that rides shotgun with the headline.** This is **one week** of late 2019 (pre-COVID, pre-gas-crisis, pre-renewables-buildout-at-scale, pre-CO₂-price-doubling). The regime where the package was validated is qualitatively different from the regime where you'd actually deploy it. Rolling-week validation across 2018-2024 is the next-paper-worth-of-work; until that lands, treat this number as **proof-of-concept evidence**, not a generalisation guarantee. The synthetic stress test in `examples/full_lifecycle_NL.ipynb` §10 hits 88 % RMSE reduction on a controlled-truth case — that's the *upper bound* when you know the answer. Real-market across regimes is the open question.
+
 Data source: Open Power System Data (OPSD) 2020-10-06 release, ENTSO-E Transparency snapshot. Public, citeable, no API key. Shipped slice at `examples/data/de_lu_2019_validation.csv` (38 KB).
+
+### Two different RMSE numbers, do not conflate them
+
+- **75 % RMSE reduction** — real EPEX clearings, DE_LU, one held-out week of Nov 2019. The number above. The bankable one.
+- **88 % RMSE reduction** — synthetic 6-bus NL grid in `full_lifecycle_NL.ipynb` §10, against a deliberately-50%-perturbed engineering reference. Stress test on a controlled-truth case.
+- **79 % "marginal-generator identification accuracy"** — also in the synthetic NL notebook §10. This is a *synthetic* metric: real EPEX does not publish ground-truth on which unit was on the margin (confidential). The 79 % number is *not* the same kind of evidence as the 75 % real-EPEX number; it's a synthetic illustration of *why* calibration helps. If you cite the package, cite the 75 %.
 
 ### The rest of the test stack
 
-- **89 unit tests pass, 85 % line coverage.** Core math modules (formulations / calibration / network / identifiability / reference-cost / posterior) sit at 83–100 %. Optional integration paths (`bayes/mcmc.py` needs PyMC) skip gracefully.
-- **Notebook-execution integration test** runs both example notebooks headless in CI on every push.
+- **94 unit + integration tests pass, 85 % line coverage.** Core math modules (formulations / calibration / network / identifiability / reference-cost / posterior) sit at 83–100 %. Optional integration paths (`bayes/mcmc.py` needs PyMC) skip gracefully.
+- **Notebook-execution integration test** runs all three example notebooks headless in CI on every push.
 - **Storage-marginality test.** Recovers truth `c_s = €45 → €44.98` on a 2-bus network where the battery sets the marginal price at evening peak.
 - **CO₂ shadow-price recovery.** Within ±$15/tCO₂ of the analytical KKT switch-point value.
-- **Synthetic stress-test.** `examples/full_lifecycle_NL.ipynb` §10 calibrated vs deliberately-50%-perturbed reference: 88 % RMSE reduction. The number to *act* on is the **75 % on real EPEX data** above; the synthetic number is just the upper bound when you control the truth.
 - **Real-data ENTSO-E path.** `examples/real_data_entso_e.ipynb` wires the same pipeline to the live ENTSO-E Transparency API (NL bidding zone). Runs in full with an `ENTSOE_API_KEY` env var; falls back to a fixture otherwise.
 
 ## What this package is *not*

@@ -1,7 +1,7 @@
 [project]
 name = "pypsa-invopt"
 version = "0.1.0a1"
-description = "Inverse-OPF simulator-calibration layer for PyPSA — recovers bid-cost vectors from observed market data"
+description = "Inverse-OPF calibration layer for PyPSA: recovers bid-cost vectors that reproduce observed market clearings, so downstream counterfactuals run on calibrated economics instead of textbook costs."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
