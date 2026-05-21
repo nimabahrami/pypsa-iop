@@ -57,6 +57,17 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/pypsa_invopt"]
 
+[tool.hatch.build.targets.sdist]
+exclude = [
+    "docs/specs",
+    "scripts",
+    ".github",
+    ".claude",
+    "examples/*.ipynb",     # large outputs; users get them from GitHub
+    "tests",                # tests live in the repo, not the sdist
+    "*.coverage",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py310"
