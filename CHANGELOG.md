@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.0a2] - 2026-05-21
+
+Documentation + framing tightening. No code or behaviour changes
+relative to 0.1.0a1 — the public API, recovered numbers, and test
+suite are identical. The release exists so the new README renders
+on PyPI (a re-upload of the same version is not permitted).
+
+### Changed
+- Soften "matches reality" everywhere to "reproduces the observed
+  clearings on the calibration window" — the model fits clearings,
+  it does not reveal the confidential true bid book.
+- Sharpen the use-case claim to BESS-revenue-relevant hours
+  (evening peak, morning ramp, residual-load regime) instead of a
+  blanket "thermals set the marginal price most hours". The latter
+  is increasingly false as zero/negative-price hours grow; the
+  package's value lives in the residual-load windows.
+- Move the "one week of late 2019, pre-COVID / pre-gas-crisis /
+  pre-renewables-buildout / pre-CO₂-doubling" caveat to ride
+  shotgun with the 75 % real-EPEX headline, not after it.
+- Add an explicit "two different RMSE numbers, do not conflate"
+  block separating 75 % (real EPEX) from 88 % (synthetic stress
+  test) from 79 % (synthetic marginal-gen-id accuracy — real EPEX
+  does not publish ground-truth on the marginal unit).
+- New precision-of-recovery callout in the README opener stating
+  the recovered bids are calibration-consistent projections onto
+  a convex DCOPF with quadratic-affine offers, not the
+  confidential real bid book; mechanism gap (EUPHEMIA step-
+  function bids + complex orders) acknowledged.
+- PyPI short description updated to match.
+
 ## [0.1.0a1] - 2026-05-21
 
 Initial alpha release. The package is a reference implementation of
