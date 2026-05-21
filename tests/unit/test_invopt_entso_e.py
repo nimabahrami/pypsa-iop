@@ -103,12 +103,32 @@ def test_load_entso_e_live_path_via_mocked_client(monkeypatch):
 
 def test_build_client_raises_without_token(monkeypatch):
     """``_build_client`` must raise when neither api_key nor env var is set."""
+    pytest.importorskip("entsoe")    # the no-key path only fires AFTER the import
     from pypsa_invopt.data.entso_e import _build_client
     from pypsa_invopt.exceptions import InvoptInputError
 
     monkeypatch.delenv("ENTSOE_API_KEY", raising=False)
     with pytest.raises(InvoptInputError, match=r"API key"):
         _build_client(api_key=None)
+
+
+def test_build_client_raises_without_entsoe_py(monkeypatch):
+    """``_build_client`` must raise ImportError with an install hint
+    when entsoe-py is not available."""
+    import builtins
+
+    from pypsa_invopt.data.entso_e import _build_client
+
+    real_import = builtins.__import__
+
+    def _no_entsoe(name, *args, **kwargs):
+        if name == "entsoe" or name.startswith("entsoe."):
+            raise ImportError(f"No module named '{name}'")
+        return real_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_entsoe)
+    with pytest.raises(ImportError, match=r"pip install pypsa-invopt\[entso_e\]"):
+        _build_client(api_key="ignored")
 
 
 def test_fetch_prices_wraps_api_errors(monkeypatch):

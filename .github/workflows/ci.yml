@@ -24,10 +24,10 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: "pip"
 
-      - name: Install package + dev extras
+      - name: Install package + dev + entso_e extras
         run: |
           python -m pip install --upgrade pip
-          pip install -e .[dev]
+          pip install -e .[dev,entso_e]
 
       - name: Lint (ruff)
         run: ruff check src tests
