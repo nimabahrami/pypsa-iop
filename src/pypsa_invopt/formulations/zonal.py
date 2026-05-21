@@ -50,17 +50,13 @@ from typing import Any
 import numpy as np
 import scipy.sparse as sp
 
-from pypsa_invopt.exceptions import InvoptConvergenceError
-from pypsa_invopt.formulations.base import InverseFormulation
+from pypsa_invopt._constants import (
+    ZONAL_MU_REGULARISER,
+)
+from pypsa_invopt.formulations.base import InverseFormulation, solve_qp_or_raise
 from pypsa_invopt.network import InvoptNetworkData
 from pypsa_invopt.solvers import SolverConfig
-from pypsa_invopt.solvers.qp import solve_qp
 from pypsa_invopt.utils.active_set import ActiveSetBatch
-
-# Small L2 penalty on the shadow-price variables — among the (c, μ)
-# decompositions of a given observed price, prefer the minimum-
-# congestion-rent solution.
-_MU_REGULARISER: float = 1e-3
 
 
 class ZonalFormulation(InverseFormulation):
@@ -103,17 +99,11 @@ class ZonalFormulation(InverseFormulation):
         model: _ZonalQP,
         solver_config: SolverConfig | None = None,
     ) -> dict[str, Any]:
-        verbose = bool(solver_config.verbose) if solver_config else False
-        qp = solve_qp(
-            Q=model.Q, q=model.q,
-            A_eq=model.A_eq, b_eq=model.b_eq,
-            lb=model.lb, ub=model.ub,
-            verbose=verbose,
+        qp = solve_qp_or_raise(
+            model=model,
+            solver_config=solver_config,
+            formulation_name="zonal",
         )
-        if not qp.is_optimal:
-            raise InvoptConvergenceError(
-                f"zonal QP did not converge ({qp.status})."
-            )
         return _build_solve_result(qp.x, model.layout, model.ctx, qp.objective)
 
     def residuals(
@@ -517,7 +507,7 @@ def _build_objective(
         q[layout.lam_z : layout.lam_z + n_lam] = -2.0 * weight_lam * observed.ravel()
 
     # μ_pair block — small Tikhonov anchor on every shadow-price slot.
-    diag[layout.mu_pair : layout.mu_pair + ctx.n_pairs * ctx.n_t] = 2.0 * _MU_REGULARISER
+    diag[layout.mu_pair : layout.mu_pair + ctx.n_pairs * ctx.n_t] = 2.0 * ZONAL_MU_REGULARISER
 
     return sp.diags(diag, format="csc"), q
 

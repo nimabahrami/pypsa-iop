@@ -44,20 +44,15 @@ from typing import TYPE_CHECKING
 import numpy as np
 from scipy.optimize import least_squares
 
+from pypsa_invopt._constants import (
+    BALANCE_PENALTY,
+)
+
 if TYPE_CHECKING:
     from pypsa_invopt.network import InvoptNetworkData
     from pypsa_invopt.solvers import SolverConfig
 
 logger = logging.getLogger(__name__)
-
-# Weight on the nodal-balance residuals relative to the flow residuals.
-# scipy.optimize.least_squares does not support equality constraints
-# natively, so balance is enforced via a heavy quadratic penalty. 1e6
-# (squared) is large enough that the optimum respects balance to within
-# solver tolerance — verified against the truth-recovery test on the
-# IEEE-3-bus fixture.
-_BALANCE_PENALTY: float = 1e6
-
 
 # ---------------------------------------------------------------------------
 # Flow-limit recovery (unchanged, closed form)
@@ -366,7 +361,7 @@ def _balance_residual(
       − Σ_{l: bus1(l) = n}  b_l · Δθ_l[t]
       − injection[n, t]
 
-    The penalty weight ``√_BALANCE_PENALTY`` puts these residuals on
+    The penalty weight ``√BALANCE_PENALTY`` puts these residuals on
     par with the flow residuals (scipy's least-squares routine sees a
     flat residual vector; the relative weight is what shifts the
     optimum).
@@ -377,7 +372,7 @@ def _balance_residual(
     np.add.at(balance, spec.line_bus0_idx, flow_per_line)
     np.subtract.at(balance, spec.line_bus1_idx, flow_per_line)
     residual = balance[spec.non_slack_buses] - spec.inject[:, spec.non_slack_buses].T
-    return np.sqrt(_BALANCE_PENALTY) * residual.ravel()
+    return np.sqrt(BALANCE_PENALTY) * residual.ravel()
 
 
 # ---------------------------------------------------------------------------

@@ -35,6 +35,11 @@ from typing import Any
 import numpy as np
 import scipy.sparse as sp
 
+from pypsa_invopt._constants import (
+    GLOBAL_CONSTRAINT_BINDING_TOL,
+    INTERTEMPORAL_BOUND_TOL_MW,
+    INTERTEMPORAL_BOUND_TOL_REL,
+)
 from pypsa_invopt.formulations.base import (
     BuildSpec,
     InverseFormulation,
@@ -43,24 +48,11 @@ from pypsa_invopt.formulations.base import (
     maxed_or_min_gen_indices,
     mu_kkt_block,
     ptdf_projection,
+    solve_qp_or_raise,
 )
 from pypsa_invopt.network import InvoptNetworkData
 from pypsa_invopt.solvers import SolverConfig
-from pypsa_invopt.solvers.qp import solve_qp
 from pypsa_invopt.utils.active_set import ActiveSetBatch
-
-# Storage / link / store dispatch is "at bound" when observed power is
-# within ``max(_INTERTEMPORAL_BOUND_TOL_MW, _INTERTEMPORAL_BOUND_TOL_REL · p_nom)``
-# of p_max or p_min. The absolute floor handles HiGHS round-off on
-# small assets; the relative term scales with capacity so a 5000 MW
-# unit doesn't flap on its 0.5 MW absolute tolerance.
-_INTERTEMPORAL_BOUND_TOL_MW: float = 0.5
-_INTERTEMPORAL_BOUND_TOL_REL: float = 0.001  # 0.1 % of p_nom
-
-# Global-constraint binding threshold: emissions within this fraction
-# of the cap count as "binding" for the active-set detector. Default
-# 2 % handles HiGHS's primal-feasibility slack on the emission row.
-_GLOBAL_CONSTRAINT_BINDING_TOL: float = 0.02
 
 
 class NoisyFormulation(InverseFormulation):
@@ -107,22 +99,11 @@ class NoisyFormulation(InverseFormulation):
         model: _NoisyQP,
         solver_config: SolverConfig | None = None,
     ) -> dict[str, Any]:
-        verbose = bool(solver_config.verbose) if solver_config else False
-        qp = solve_qp(
-            Q=model.Q,
-            q=model.q,
-            A_eq=model.A_eq,
-            b_eq=model.b_eq,
-            lb=model.lb,
-            ub=model.ub,
-            verbose=verbose,
+        qp = solve_qp_or_raise(
+            model=model,
+            solver_config=solver_config,
+            formulation_name="noisy",
         )
-        if not qp.is_optimal:
-            from pypsa_invopt.exceptions import InvoptConvergenceError
-            raise InvoptConvergenceError(
-                f"noisy QP did not converge ({qp.status})."
-            )
-
         theta = model.layout.extract_costs(
             qp.x, model.generators, model.storage_units,
             model.links, model.stores, model.global_constraints,
@@ -786,7 +767,7 @@ def _build_bounds(
         soc = storage_obs.get("soc")          # (n_t, n_s) or None
         # Caller can override; otherwise scale tolerance per-unit by p_nom.
         tol_abs = float(storage_obs.get(
-            "active_set_tol", _INTERTEMPORAL_BOUND_TOL_MW,
+            "active_set_tol", INTERTEMPORAL_BOUND_TOL_MW,
         ))
 
         # Signed-dual convention (handles both p_dispatch ≥ 0 and
@@ -800,7 +781,7 @@ def _build_bounds(
             p_nom = float(network_data.storage_p_nom[s])
             max_hours = float(network_data.storage_max_hours.get(s, 1.0))
             soc_max = p_nom * max_hours
-            tol = max(tol_abs, _INTERTEMPORAL_BOUND_TOL_REL * p_nom)
+            tol = max(tol_abs, INTERTEMPORAL_BOUND_TOL_REL * p_nom)
             for t in range(n_t):
                 # μ_d: discharge dual
                 idx_d = layout.mu_d_idx(s_idx, t)
@@ -831,12 +812,12 @@ def _build_bounds(
         n_t = layout.n_t
         lb[layout.c_link : layout.c_link + n_l] = 0.0
         p_link = link_obs["p"]   # (n_t, n_links) — observed signed flow
-        tol_abs = float(link_obs.get("active_set_tol", _INTERTEMPORAL_BOUND_TOL_MW))
+        tol_abs = float(link_obs.get("active_set_tol", INTERTEMPORAL_BOUND_TOL_MW))
         for l_idx, ln in enumerate(links):
             p_nom = float(network_data.link_p_nom[ln])
             p_min = float(network_data.link_p_min_pu.get(ln, 0.0)) * p_nom
             p_max = float(network_data.link_p_max_pu.get(ln, 1.0)) * p_nom
-            tol = max(tol_abs, _INTERTEMPORAL_BOUND_TOL_REL * p_nom)
+            tol = max(tol_abs, INTERTEMPORAL_BOUND_TOL_REL * p_nom)
             for t in range(n_t):
                 idx = layout.mu_link_idx(l_idx, t)
                 if p_link[t, l_idx] >= p_max - tol:
@@ -872,7 +853,7 @@ def _build_bounds(
         weighted_dispatch = dispatch_obs * snap_w_used[:, None]   # (n_t, n_gens)
         total_emissions = float((weighted_dispatch * gen_emissions[None, :]).sum())
 
-        # uses module-level _GLOBAL_CONSTRAINT_BINDING_TOL
+        # uses module-level GLOBAL_CONSTRAINT_BINDING_TOL
         for gc_idx, gc in enumerate(global_constraints):
             cap = float(network_data.global_constraint_constant.get(gc, 0.0))
             sense = network_data.global_constraint_sense.get(gc, "<=")
@@ -882,7 +863,7 @@ def _build_bounds(
                 lb[idx], ub[idx] = 0.0, 0.0
                 continue
             ratio = total_emissions / cap
-            if ratio >= (1.0 - _GLOBAL_CONSTRAINT_BINDING_TOL):
+            if ratio >= (1.0 - GLOBAL_CONSTRAINT_BINDING_TOL):
                 lb[idx], ub[idx] = 0.0, np.inf       # binding → recoverable μ
             else:
                 lb[idx], ub[idx] = 0.0, 0.0           # slack → μ pinned to 0
@@ -894,13 +875,13 @@ def _build_bounds(
         lb[layout.c_store : layout.c_store + n_s] = 0.0
         lb[layout.nu_store : layout.nu_store + n_s * n_t] = 0.0  # SOC value ≥ 0
         p_store_obs = store_obs["p"]   # (n_t, n_stores) signed power
-        tol_abs = float(store_obs.get("active_set_tol", _INTERTEMPORAL_BOUND_TOL_MW))
+        tol_abs = float(store_obs.get("active_set_tol", INTERTEMPORAL_BOUND_TOL_MW))
         for s_idx, s in enumerate(stores):
             e_nom = float(network_data.store_e_nom[s])
             # Stores have no separate p_nom; treat as |p| ≤ e_nom / hr.
             # The signed-dual handles both bounds.
             p_cap = e_nom   # PyPSA's default: p unbounded; if e_nom finite use it
-            tol = max(tol_abs, _INTERTEMPORAL_BOUND_TOL_REL * p_cap)
+            tol = max(tol_abs, INTERTEMPORAL_BOUND_TOL_REL * p_cap)
             for t in range(n_t):
                 idx = layout.mu_store_idx(s_idx, t)
                 if p_store_obs[t, s_idx] >= p_cap - tol:

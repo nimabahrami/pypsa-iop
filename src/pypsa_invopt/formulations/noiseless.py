@@ -32,7 +32,6 @@ from typing import Any
 import numpy as np
 import scipy.sparse as sp
 
-from pypsa_invopt.exceptions import InvoptConvergenceError
 from pypsa_invopt.formulations.base import (
     BuildSpec,
     InverseFormulation,
@@ -41,10 +40,10 @@ from pypsa_invopt.formulations.base import (
     maxed_or_min_gen_indices,
     mu_kkt_block,
     ptdf_projection,
+    solve_qp_or_raise,
 )
 from pypsa_invopt.network import InvoptNetworkData
 from pypsa_invopt.solvers import SolverConfig
-from pypsa_invopt.solvers.qp import solve_qp
 from pypsa_invopt.utils.active_set import ActiveSetBatch
 
 
@@ -71,20 +70,15 @@ class NoiselessFormulation(InverseFormulation):
         model: _NoiselessQP,
         solver_config: SolverConfig | None = None,
     ) -> dict[str, Any]:
-        verbose = bool(solver_config.verbose) if solver_config else False
-        qp = solve_qp(
-            Q=model.Q, q=model.q,
-            A_eq=model.A_eq, b_eq=model.b_eq,
-            lb=model.lb, ub=model.ub,
-            verbose=verbose,
+        qp = solve_qp_or_raise(
+            model=model,
+            solver_config=solver_config,
+            formulation_name="noiseless",
+            convergence_hint=(
+                "The active set may be inconsistent with the observed "
+                "prices — try the 'noisy' formulation."
+            ),
         )
-        if not qp.is_optimal:
-            raise InvoptConvergenceError(
-                f"noiseless QP did not converge ({qp.status}). "
-                f"The active set may be inconsistent with the observed "
-                f"prices — try the 'noisy' formulation."
-            )
-
         theta = model.layout.extract_costs(qp.x, model.generators)
         residuals = _price_residual_norms(
             x=qp.x,

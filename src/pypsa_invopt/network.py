@@ -490,6 +490,20 @@ def _require_nonempty(
         )
 
 
+def _safe_pypsa_table(network: pypsa.Network, attr: str):
+    """Return ``getattr(network, attr)`` if it's a non-empty table, else None.
+
+    Centralises the "is this PyPSA component family populated?" check
+    used by every ``_read_*`` reader for optional component families
+    (storage_units, links, stores, …). Generators / buses / lines are
+    *required*, so they raise via :func:`_require_nonempty` instead.
+    """
+    table = getattr(network, attr, None)
+    if table is None or len(table) == 0:
+        return None
+    return table
+
+
 def _read_generators(
     network: pypsa.Network,
     generators: list[str],
@@ -564,8 +578,8 @@ def _read_storage(
     the inverse OPF then runs the legacy generator-only path
     unchanged.
     """
-    units = getattr(network, "storage_units", None)
-    if units is None or len(units) == 0:
+    units = _safe_pypsa_table(network, "storage_units")
+    if units is None:
         empty: dict[str, float] = {}
         return [], {}, empty, empty, empty, empty, empty
 
@@ -606,8 +620,8 @@ def _read_links(
     Returns empty containers when no links are present so legacy
     line-only networks remain numerically identical.
     """
-    links = getattr(network, "links", None)
-    if links is None or len(links) == 0:
+    links = _safe_pypsa_table(network, "links")
+    if links is None:
         empty: dict[str, float] = {}
         return [], {}, {}, empty, empty, empty, empty, empty
 
@@ -722,8 +736,8 @@ def _read_stores(
     dict[str, float],
 ]:
     """Read the network's ``Store`` components."""
-    stores = getattr(network, "stores", None)
-    if stores is None or len(stores) == 0:
+    stores = _safe_pypsa_table(network, "stores")
+    if stores is None:
         empty: dict[str, float] = {}
         return [], {}, empty, empty, empty
     names = list(stores.index)

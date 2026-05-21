@@ -15,9 +15,8 @@ sparse matrices directly and hand them off to :mod:`highspy`.
 """
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol, runtime_checkable
 
 import numpy as np
 
@@ -27,19 +26,23 @@ if TYPE_CHECKING:
     from pypsa_invopt.utils.active_set import ActiveSetBatch
 
 
-class InverseFormulation(ABC):
-    """Abstract base for inverse-OPF formulations.
+@runtime_checkable
+class InverseFormulation(Protocol):
+    """Structural protocol every inverse-OPF formulation satisfies.
 
-    Subclasses must implement :meth:`build_model`, :meth:`solve` and
-    :meth:`residuals`. ``build_model`` may return any object — one of
-    the dataclass-wrapped QPs the native back ends use, or a
-    ``linopy.Model`` for the linopy back end — that ``solve`` knows
-    how to consume.
+    A formulation is anything with a ``build_model`` / ``solve`` /
+    ``residuals`` triple matching the signatures below. ``build_model``
+    may return any object — one of the dataclass-wrapped QPs the native
+    back ends use, or a ``linopy.Model`` — that ``solve`` knows how to
+    consume.
+
+    Using :class:`typing.Protocol` keeps the contract honest (calibrate
+    duck-types these anyway) without an inheritance dependency on the
+    three concrete classes.
     """
 
-    name: str = "base"
+    name: ClassVar[str]
 
-    @abstractmethod
     def build_model(
         self,
         network_data: InvoptNetworkData,
@@ -48,16 +51,16 @@ class InverseFormulation(ABC):
         **kwargs: Any,
     ) -> Any:
         """Build a model object for one active-set batch."""
+        ...
 
-    @abstractmethod
     def solve(
         self,
         model: Any,
         solver_config: SolverConfig | None = None,
     ) -> dict[str, Any]:
         """Solve the model and return ``{theta, residuals, status, objective}``."""
+        ...
 
-    @abstractmethod
     def residuals(
         self,
         theta: dict[str, float],
@@ -66,6 +69,7 @@ class InverseFormulation(ABC):
         batch: ActiveSetBatch,
     ) -> np.ndarray:
         """Per-timestep KKT residual norms for a given parameter vector."""
+        ...
 
 
 @dataclass(frozen=True)
@@ -258,6 +262,43 @@ def cost_residual_norms(
     return np.sqrt(sse_per_t / n_gens)
 
 
+def solve_qp_or_raise(
+    *,
+    model: Any,
+    solver_config: SolverConfig | None,
+    formulation_name: str,
+    convergence_hint: str = "",
+):
+    """Boilerplate every formulation's ``solve()`` shares.
+
+    Reads ``verbose`` off ``solver_config``, dispatches to
+    :func:`pypsa_invopt.solvers.qp.solve_qp` with the standard
+    ``Q/q/A_eq/b_eq/lb/ub`` payload, and raises
+    :class:`InvoptConvergenceError` on non-optimal status. Returns the
+    raw ``solve_qp`` result.
+
+    ``convergence_hint`` is an optional extra line appended to the
+    error message when the solver doesn't converge — e.g. the
+    noiseless formulation suggests trying ``noisy``.
+    """
+    from pypsa_invopt.exceptions import InvoptConvergenceError
+    from pypsa_invopt.solvers.qp import solve_qp
+
+    verbose = bool(solver_config.verbose) if solver_config else False
+    qp = solve_qp(
+        Q=model.Q, q=model.q,
+        A_eq=model.A_eq, b_eq=model.b_eq,
+        lb=model.lb, ub=model.ub,
+        verbose=verbose,
+    )
+    if not qp.is_optimal:
+        msg = f"{formulation_name} QP did not converge ({qp.status})."
+        if convergence_hint:
+            msg = f"{msg} {convergence_hint}"
+        raise InvoptConvergenceError(msg)
+    return qp
+
+
 __all__ = [
     "BuildSpec",
     "InverseFormulation",
@@ -266,4 +307,5 @@ __all__ = [
     "maxed_or_min_gen_indices",
     "mu_kkt_block",
     "ptdf_projection",
+    "solve_qp_or_raise",
 ]

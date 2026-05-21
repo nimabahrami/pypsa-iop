@@ -21,6 +21,9 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 import pandas as pd
 
+from pypsa_invopt._constants import (
+    BATCH_VARIANCE_FLOOR,
+)
 from pypsa_invopt.exceptions import InvoptInputError
 from pypsa_invopt.network import InvoptNetworkData, read_network
 from pypsa_invopt.results import InverseResult
@@ -42,12 +45,6 @@ logger = logging.getLogger(__name__)
 FormulationType = Literal["noiseless", "noisy", "zonal"]
 
 _VALID_FORMULATIONS: frozenset[str] = frozenset(("noiseless", "noisy", "zonal"))
-
-# Floor on per-batch residual variance so a perfectly-fitting batch
-# doesn't dominate the inverse-variance aggregation with a near-zero
-# denominator. Units: (EUR/MWh)².
-_BATCH_VARIANCE_FLOOR: float = 1e-6
-
 
 @dataclass(frozen=True)
 class _BatchSolution:
@@ -418,13 +415,13 @@ def _blue_weight(*, n_timesteps: int, residuals: np.ndarray) -> float:
     * ``1 / σ²_k`` (inverse residual variance) — tighter-fitting batches
       are more reliable estimates of θ.
 
-    The variance is floored at :data:`_BATCH_VARIANCE_FLOOR` so a
+    The variance is floored at :data:`BATCH_VARIANCE_FLOOR` so a
     near-perfect batch can not blow up the denominator.
     """
     if n_timesteps <= 0:
         return 0.0
     variance = float(np.mean(residuals ** 2)) if residuals.size > 0 else 0.0
-    return n_timesteps / max(variance, _BATCH_VARIANCE_FLOOR)
+    return n_timesteps / max(variance, BATCH_VARIANCE_FLOOR)
 
 
 def _blue_aggregate(solutions: list[_BatchSolution]) -> dict[str, float]:
