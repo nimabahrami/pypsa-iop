@@ -22,7 +22,12 @@ EXAMPLES = pathlib.Path(__file__).resolve().parents[2] / "examples"
 
 @pytest.mark.slow
 @pytest.mark.parametrize(
-    "nb_name", ["full_lifecycle_NL.ipynb", "real_data_entso_e.ipynb"]
+    "nb_name",
+    [
+        "full_lifecycle_NL.ipynb",
+        "real_data_entso_e.ipynb",
+        "real_data_DE_LU_validation.ipynb",
+    ],
 )
 def test_notebook_executes_cleanly(nb_name: str) -> None:
     """Execute the notebook in a fresh kernel; fail on any cell error."""

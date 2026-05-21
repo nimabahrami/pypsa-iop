@@ -122,11 +122,24 @@ result = pio.calibrate(
 
 ## Does it actually work?
 
-- **78 unit tests pass, 83 % line coverage.** The core math modules (formulations / calibration / network / identifiability / reference-cost / posterior) sit at 71–98 %. The 0 %-coverage modules are integration paths that need external systems (`bayes/mcmc.py` needs PyMC, `data/entso_e.py` needs an ENTSO-E API key — exercised end-to-end in `examples/real_data_entso_e.ipynb`).
-- **Storage-marginality test.** On a 2-bus network where the battery sets the marginal price at evening peak, the package recovers truth `c_s = €45 → €44.98` — error of 1.6 cents. See `tests/unit/test_invopt_storage.py`.
-- **CO₂ shadow-price recovery.** Within ±$15/tCO₂ of the analytical KKT switch-point value. See `tests/unit/test_invopt_global_constraints.py`.
-- **Synthetic stress-test cross-validation.** In `examples/full_lifecycle_NL.ipynb` §10, calibrated bids beat a deliberately-50%-perturbed engineering-reference baseline by ~88 % RMSE on a held-out day (7.08 vs 58.40 EUR/MWh). This is a *synthetic* benchmark — the engineering reference is constructed wrong by design — not a real-market comparison. Real-market engineering reference RMSE is usually 15–25 EUR/MWh and a real-data comparison is not yet shipped.
-- **Real-data path.** `examples/real_data_entso_e.ipynb` wires the same pipeline to ENTSO-E NL day-ahead data. It runs in full when an `ENTSOE_API_KEY` environment variable is set; otherwise it falls back to the `synthesize=True` fixture so the API code path still executes. For your own runs, please call `pio.assess_data_quality` first — gappy or spiky downloads silently degrade the recovery, and the quality report tells you whether the data is fit before you spend the solver run.
+**Yes — on real European EPEX data.** Headline numbers from `examples/real_data_DE_LU_validation.ipynb` (DE_LU day-ahead, week of 11 Nov 2019, calibrated on the preceding week):
+
+| Held-out-week LMP RMSE | EUR/MWh |
+|---|---|
+| Engineering reference (fuel + heat-rate + CO₂ + O&M) | **22.80** |
+| Inverse-OPF calibrated bids | **5.66** |
+| **Improvement** | **−75.2 %** |
+
+Data source: Open Power System Data (OPSD) 2020-10-06 release, ENTSO-E Transparency snapshot. Public, citeable, no API key. Shipped slice at `examples/data/de_lu_2019_validation.csv` (38 KB).
+
+### The rest of the test stack
+
+- **89 unit tests pass, 85 % line coverage.** Core math modules (formulations / calibration / network / identifiability / reference-cost / posterior) sit at 83–100 %. Optional integration paths (`bayes/mcmc.py` needs PyMC) skip gracefully.
+- **Notebook-execution integration test** runs both example notebooks headless in CI on every push.
+- **Storage-marginality test.** Recovers truth `c_s = €45 → €44.98` on a 2-bus network where the battery sets the marginal price at evening peak.
+- **CO₂ shadow-price recovery.** Within ±$15/tCO₂ of the analytical KKT switch-point value.
+- **Synthetic stress-test.** `examples/full_lifecycle_NL.ipynb` §10 calibrated vs deliberately-50%-perturbed reference: 88 % RMSE reduction. The number to *act* on is the **75 % on real EPEX data** above; the synthetic number is just the upper bound when you control the truth.
+- **Real-data ENTSO-E path.** `examples/real_data_entso_e.ipynb` wires the same pipeline to the live ENTSO-E Transparency API (NL bidding zone). Runs in full with an `ENTSOE_API_KEY` env var; falls back to a fixture otherwise.
 
 ## What this package is *not*
 
