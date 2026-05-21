@@ -22,17 +22,20 @@ Typical usage::
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pypsa_invopt._version import __version__
 from pypsa_invopt.exceptions import (
     InvoptConvergenceError,
     InvoptInputError,
 )
+from pypsa_invopt.reference_costs import ReferenceCost
 from pypsa_invopt.results import (
     InverseResult,
     PosteriorResult,
 )
+
+FormulationType = Literal["noiseless", "noisy", "zonal"]
 
 
 def calibrate(*args: Any, **kwargs: Any) -> InverseResult:
@@ -105,6 +108,20 @@ def flag_withholding(*args: Any, **kwargs: Any):
     return _impl(*args, **kwargs)
 
 
+def compute_reference_cost(*args: Any, **kwargs: Any):
+    """Compute the engineering-reference marginal cost of a generator.
+
+    Returns ``fuel_price × heat_rate + co2_price × emission + var_O&M``
+    as a :class:`ReferenceCost` dataclass. Use this when you want the
+    reference number directly without going through the withholding
+    scorer (e.g. for custom flagging rules).
+
+    See :func:`pypsa_invopt.reference_costs.compute_reference_cost`.
+    """
+    from pypsa_invopt.reference_costs import compute_reference_cost as _impl
+    return _impl(*args, **kwargs)
+
+
 def load_entso_e(*args: Any, **kwargs: Any):
     """Load ENTSO-E market data.
 
@@ -149,14 +166,17 @@ def assess_data_quality(*args: Any, **kwargs: Any):
 
 
 __all__ = [
+    "FormulationType",
     "InverseResult",
     "InvoptConvergenceError",
     "InvoptInputError",
     "PosteriorResult",
+    "ReferenceCost",
     "__version__",
     "apply",
     "assess_data_quality",
     "calibrate",
+    "compute_reference_cost",
     "flag_withholding",
     "identifiability",
     "load_entso_e",

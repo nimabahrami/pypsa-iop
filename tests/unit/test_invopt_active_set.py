@@ -6,7 +6,6 @@ from pypsa_invopt.utils.active_set import (
     cluster_active_sets,
     detect_active_set,
     detect_active_sets_temporal,
-    jaccard_similarity,
 )
 
 
@@ -171,17 +170,6 @@ def test_astb_compression_synthetic():
     # Total timesteps across batches = T
     total = sum(len(b.timestep_indices) for b in batches)
     assert total == T
-
-
-def test_jaccard_similarity():
-    """Jaccard similarity between active sets."""
-    a = ActiveSet(congested_lines=frozenset({"L1", "L2"}))
-    b = ActiveSet(congested_lines=frozenset({"L1", "L3"}))
-    c = ActiveSet(congested_lines=frozenset({"L1", "L2"}))
-
-    assert jaccard_similarity(a, c) == 1.0
-    assert 0.0 < jaccard_similarity(a, b) < 1.0
-    assert jaccard_similarity(ActiveSet(), ActiveSet()) == 1.0
 
 
 def test_astb_multibatch_calibrate(two_bus_network):

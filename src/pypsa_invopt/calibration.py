@@ -182,23 +182,21 @@ def calibrate(
 
 
 def _build_formulation(name: FormulationType) -> InverseFormulation:
-    """Instantiate a formulation class.
-
-    The four core QP formulations import a small QP helper layer
-    (scipy.sparse + highspy).
-    """
+    """Instantiate the formulation class for ``name``."""
     from pypsa_invopt.formulations import (
         NoiselessFormulation,
         NoisyFormulation,
         ZonalFormulation,
     )
 
-    registry: dict[str, type[InverseFormulation]] = {
-        "noiseless": NoiselessFormulation,
-        "noisy": NoisyFormulation,
-        "zonal": ZonalFormulation,
-    }
-    return registry[name]()
+    if name == "noiseless":
+        return NoiselessFormulation()
+    if name == "noisy":
+        return NoisyFormulation()
+    if name == "zonal":
+        return ZonalFormulation()
+    # _VALID_FORMULATIONS gate above guarantees this is unreachable
+    raise ValueError(f"Unknown formulation: {name}")
 
 
 def _maybe_collapse_for_intertemporal(

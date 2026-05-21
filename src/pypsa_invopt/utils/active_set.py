@@ -223,28 +223,9 @@ def cluster_active_sets(active_sets: list[ActiveSet]) -> list[ActiveSetBatch]:
     return batches
 
 
-def jaccard_similarity(a: ActiveSet, b: ActiveSet) -> float:
-    """Jaccard similarity between two active sets, in ``[0, 1]``.
-
-    Returns ``1.0`` when both sets are empty. Used by the ASTB warm
-    starter to pick which previously-solved batch's solution to seed a
-    new batch's variables with.
-    """
-    a_union = a.congested_lines | a.maxed_generators | a.min_bound_generators
-    b_union = b.congested_lines | b.maxed_generators | b.min_bound_generators
-
-    if not a_union and not b_union:
-        return 1.0
-    intersection = len(a_union & b_union)
-    union = len(a_union | b_union)
-    return intersection / union if union > 0 else 1.0
-
-
 __all__ = [
     "ActiveSet",
     "ActiveSetBatch",
     "cluster_active_sets",
-    "detect_active_set",
     "detect_active_sets_temporal",
-    "jaccard_similarity",
 ]

@@ -125,8 +125,8 @@ class ZonalFormulation(InverseFormulation):
     ) -> np.ndarray:
         """Diagnostic per-timestep residual ``‖λ_z − c_z‖``.
 
-        Mirrors :meth:`pypsa_invopt.formulations.zonal.ZonalFormulation.residuals`
-        — ignores congestion rents (μ) because they are not in ``theta``.
+        Ignores zonal congestion rents (μ): they are not in ``theta``
+        and would not be observable from clearing prices alone.
         """
         prices = observations["prices"]
         n_t = prices.shape[0]
